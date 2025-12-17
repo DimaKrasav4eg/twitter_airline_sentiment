@@ -34,7 +34,8 @@ def build_pipeline(cfg: ModelConfig | None = None) -> Pipeline:
     cfg = cfg or ModelConfig()
 
     vectorizer = TfidfVectorizer(
-        preprocessor=normalize_text,
+        preprocessor=None,
+        tokenizer=None,
         lowercase=True,
         max_features=cfg.max_features,
         ngram_range=cfg.ngram_range,

@@ -3,13 +3,16 @@ import os
 import time
 from datetime import datetime, timezone
 
-import joblib
+import numpy as np
+import onnxruntime as ort
 from fastapi import FastAPI, Request
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from sqlalchemy import create_engine, text
 from starlette.responses import JSONResponse, PlainTextResponse, Response
 
-MODEL_PATH = os.getenv("MODEL_PATH", "artifacts/model.joblib")
+from ml import normalize_text
+
+MODEL_PATH = os.getenv("MODEL_PATH", "artifacts/model.onnx")
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "postgresql+psycopg2://feature_user:feature_pass@localhost:5432/feature_store",
@@ -17,7 +20,6 @@ DATABASE_URL = os.getenv(
 
 REQ_COUNT = Counter("forward_requests_total", "Total /forward requests", ["status"])
 REQ_LAT = Histogram("forward_request_seconds", "Latency of /forward requests")
-
 
 app = FastAPI(title="Airline Tweet Sentiment")
 
@@ -40,22 +42,26 @@ def init_db(engine) -> None:
         conn.execute(text(ddl))
 
 
-def load_model(path: str):
-    return joblib.load(path)
+def load_session(path: str):
+    return ort.InferenceSession(path, providers=["CPUExecutionProvider"])
 
 
 engine = get_engine()
 init_db(engine)
 
 try:
-    model = load_model(MODEL_PATH)
+    session = load_session(MODEL_PATH)
+    input_name = session.get_inputs()[0].name
+    meta = session.get_modelmeta().custom_metadata_map or {}
 except Exception:
-    model = None
+    session = None
+    input_name = None
+    meta = {}
 
 
 @app.get("/health")
 def health():
-    if model is None:
+    if session is None:
         return JSONResponse({"status": "no_model"}, status_code=503)
     return {"status": "ok"}
 
@@ -63,6 +69,15 @@ def health():
 @app.get("/metrics")
 def metrics():
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
+@app.get("/metadata")
+def metadata():
+    return {
+        "commit_hash": meta.get("commit_hash", "unknown"),
+        "saved_at": meta.get("saved_at", "unknown"),
+        "experiment_name": meta.get("experiment_name", "unknown"),
+    }
 
 
 @app.post("/forward")
@@ -80,21 +95,29 @@ async def forward(request: Request):
         return PlainTextResponse("bad request", status_code=400)
 
     text_in = payload["text"].strip()
+    text_in = normalize_text(text_in)
+
     if not text_in:
         REQ_COUNT.labels(status="400").inc()
         return PlainTextResponse("bad request", status_code=400)
 
-    if model is None:
+    if session is None or input_name is None:
         REQ_COUNT.labels(status="403").inc()
         return PlainTextResponse("the model could not process the data", status_code=403)
 
     try:
-        proba = model.predict_proba([text_in])[0].tolist()
-        classes = list(getattr(model, "classes_", []))
-        if not classes:
-            classes = list(model.named_steps["clf"].classes_)
-        label = classes[int(max(range(len(proba)), key=lambda i: proba[i]))]
-        proba_map = {classes[i]: float(proba[i]) for i in range(len(classes))}
+        x = np.array([[text_in]], dtype=object)
+        outputs = session.run(None, {input_name: x})
+
+        proba_vec = outputs[1][0].tolist()
+
+        meta = session.get_modelmeta().custom_metadata_map or {}
+        classes = json.loads(meta.get("classes_json", '["negative","neutral","positive"]'))
+
+        proba_vec = outputs[1][0].tolist()
+        proba_map = {classes[i]: float(proba_vec[i]) for i in range(min(len(classes), len(proba_vec)))}
+        label = classes[int(max(range(len(proba_vec)), key=lambda i: proba_vec[i]))]
+
     except Exception:
         REQ_COUNT.labels(status="403").inc()
         return PlainTextResponse("the model could not process the data", status_code=403)

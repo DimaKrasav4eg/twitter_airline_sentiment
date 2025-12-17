@@ -14,7 +14,7 @@ The CSV file `Tweets.csv` is expected (columns `text` and `airline_sentiment').
 │   ├── Dockerfile
 │   ├── app.py
 │   ├── artifacts
-│   │   ├── model.joblib
+│   │   ├── model.onnx
 │   │   └── model.metrics.json
 │   ├── ml.py
 │   ├── requirements.txt
@@ -26,26 +26,19 @@ The CSV file `Tweets.csv` is expected (columns `text` and `airline_sentiment').
 │   ├── Dockerfile
 │   ├── index.html
 │   └── nginx.conf
-└── monitoring
-    └── prometheus.yml
+├── monitoring
+│   └── prometheus.yml
+└── run.sh
 ```
 
 ## Model training
 
-### Option 1: Train on host
-```bash
-python -m venv .venv
-source .venv/bin/activate
-
-pip install -r backend/requirements.txt
-python backend/train.py --data data/Tweets.csv --out backend/artifacts/model.joblib
-```
-### Option 2: Learning via Docker
+### Quick start
 
 ```bash
-docker compose run --rm backend python train.py --data /data/Tweets.csv --out /artifacts/model.joblib
+chmod +x run.sh
+./run.sh
 ```
-
 
 After the run:
 - Frontend: http://localhost:8080
@@ -53,14 +46,11 @@ After the run:
 - Prometheus: http://localhost:9090
 
 ## Using the API
-
-Input example:
 ```bash
 curl -s -X POST http://localhost:8000/forward \
   -H "Content-Type: application/json" \
   -d '{"text":"Thanks you, great service!"}'
 ```
-Output example:
 ```json
 {
     "label": "positive",
@@ -70,4 +60,22 @@ Output example:
         "positive":0.994560729026173
     }
 }
+```
+### GET /metadata
+```bash
+curl -s http://localhost:8000/metadata
+```
+```json
+{
+    "commit_hash":"<hash>",
+    "saved_at":"<timestamp>",
+    "experiment_name":"v1"
+}
+```
+### GET /metrics
+```bash
+curl -s http://localhost:8000/metadata
+```
+```
+<Prometheus-metrics>
 ```

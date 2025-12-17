@@ -4,9 +4,10 @@ services:
     container_name: airline-sentiment-backend
     environment:
       - DATABASE_URL=postgresql+psycopg2://feature_user:feature_pass@db:5432/feature_store
-      - MODEL_PATH=/artifacts/model.joblib
+      - MODEL_PATH=/artifacts/model.onnx
     volumes:
       - ./backend/artifacts:/artifacts
+      - ./data:/data:ro
     depends_on:
       - db
     ports:
