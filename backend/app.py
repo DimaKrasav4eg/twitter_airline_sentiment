@@ -86,7 +86,7 @@ async def forward(request: Request):
 
     if model is None:
         REQ_COUNT.labels(status="403").inc()
-        return PlainTextResponse("модель не смогла обработать данные", status_code=403)
+        return PlainTextResponse("the model could not process the data", status_code=403)
 
     try:
         proba = model.predict_proba([text_in])[0].tolist()
@@ -97,7 +97,7 @@ async def forward(request: Request):
         proba_map = {classes[i]: float(proba[i]) for i in range(len(classes))}
     except Exception:
         REQ_COUNT.labels(status="403").inc()
-        return PlainTextResponse("модель не смогла обработать данные", status_code=403)
+        return PlainTextResponse("the model could not process the data", status_code=403)
 
     try:
         with engine.begin() as conn:
