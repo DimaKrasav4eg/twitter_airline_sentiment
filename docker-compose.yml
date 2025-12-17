@@ -1,0 +1,46 @@
+services:
+  backend:
+    build: ./backend
+    container_name: airline-sentiment-backend
+    environment:
+      - DATABASE_URL=postgresql+psycopg2://feature_user:feature_pass@db:5432/feature_store
+      - MODEL_PATH=/artifacts/model.joblib
+    volumes:
+      - ./backend/artifacts:/artifacts
+    depends_on:
+      - db
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: ./frontend
+    container_name: airline-sentiment-frontend
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+  db:
+    image: postgres:16-alpine
+    container_name: airline-sentiment-db
+    environment:
+      - POSTGRES_DB=feature_store
+      - POSTGRES_USER=feature_user
+      - POSTGRES_PASSWORD=feature_pass
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  monitoring:
+    image: prom/prometheus:v2.54.1
+    container_name: airline-sentiment-prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - backend
+    ports:
+      - "9090:9090"
+
+volumes:
+  pgdata:

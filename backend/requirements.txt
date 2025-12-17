@@ -1,0 +1,11 @@
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+
+pandas==2.2.3
+scikit-learn==1.5.2
+joblib==1.4.2
+
+SQLAlchemy==2.0.36
+psycopg2-binary==2.9.10
+
+prometheus-client==0.21.1
